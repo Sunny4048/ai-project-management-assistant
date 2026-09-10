@@ -1,432 +1,375 @@
 import streamlit as st
 from huggingface_hub import InferenceClient
 
-
-# ---------------------------------------------------------
+# ------------------------------------------------------------
 # Page configuration
-# ---------------------------------------------------------
-
+# ------------------------------------------------------------
 st.set_page_config(
     page_title="AI Project Management Assistant",
     page_icon="📊",
-    layout="wide"
+    layout="wide",
 )
 
+MODEL_ID = "Qwen/Qwen2.5-3B-Instruct"
+MAX_INPUT_CHARS = 10000
+MAX_NEW_TOKENS = 900
 
-# ---------------------------------------------------------
-# Application title and introduction
-# ---------------------------------------------------------
+FUNCTIONS = {
+    "Project Plan": {
+        "description": "Generate a structured draft project plan.",
+        "instruction": """
+Create a structured project plan using ONLY the project information supplied by
+the user.
 
+Important rules:
+- Do not invent project facts.
+- Do not invent names, dates, budgets, technologies, requirements, deadlines,
+  stakeholders, resources or project status.
+- If a required fact is missing, write "Not provided" or "Requires confirmation".
+- You may propose reasonable generic tasks or planning suggestions, but clearly
+  label them as "Proposed" rather than presenting them as confirmed project facts.
+- Keep confirmed information and proposed information clearly separated.
+
+Use these headings:
+1. Project Overview
+2. Objectives
+3. Key Deliverables
+4. Proposed Tasks
+5. Milestones / Dates
+6. Dependencies
+7. Risks / Issues
+8. Assumptions Requiring Confirmation
+9. Next Steps
+""",
+    },
+    "Risk Register": {
+        "description": "Generate a structured draft risk register.",
+        "instruction": """
+Create a project risk register using ONLY the project information supplied by
+the user.
+
+Important rules:
+- Do not claim that an unsupported risk is a confirmed project fact.
+- Separate risks explicitly mentioned by the user from generic potential risks.
+- For generic risks, label them "Potential / requires confirmation".
+- Do not invent owners, dates, budgets, technologies or project-specific events.
+- If likelihood, impact, owner or mitigation information is missing, write
+  "Not provided" or "Requires confirmation".
+- Suggested mitigations may be proposed, but label them as proposed actions.
+
+Use a table-like structure with:
+Risk | Source/Status | Likelihood | Impact | Proposed Mitigation | Owner | Confirmation Required
+
+Then provide:
+Key Risk Notes
+Human Verification Required
+""",
+    },
+    "Meeting Minutes": {
+        "description": "Turn meeting information into structured minutes.",
+        "instruction": """
+Create structured meeting minutes using ONLY the information supplied by the
+user.
+
+Important rules:
+- Do not invent attendees, decisions, action owners, deadlines or meeting dates.
+- Do not infer that a discussion resulted in a decision unless the user states it.
+- If information is missing, write "Not provided".
+- Clearly distinguish decisions from discussion points.
+- Do not create action items that were not stated or clearly requested.
+
+Use these headings:
+1. Meeting Details
+2. Attendees
+3. Key Discussion Points
+4. Decisions
+5. Action Items
+6. Issues / Open Questions
+7. Next Steps
+8. Information Requiring Confirmation
+""",
+    },
+    "Project Summary": {
+        "description": "Generate a concise project summary.",
+        "instruction": """
+Create a concise project summary using ONLY the information supplied by the user.
+
+Important rules:
+- Do not invent project facts.
+- Do not invent project status, dates, budget, people, technologies,
+  achievements or problems.
+- If information is missing, write "Not provided".
+- Do not convert assumptions into facts.
+- Keep the summary concise and suitable for a project-management context.
+
+Use these headings:
+1. Project Overview
+2. Objectives
+3. Current Status
+4. Key Activities
+5. Issues / Risks
+6. Next Steps
+7. Information Requiring Confirmation
+""",
+    },
+    "Stakeholder Communication": {
+        "description": "Generate a draft stakeholder project update.",
+        "instruction": """
+Draft a professional stakeholder communication using ONLY the information
+supplied by the user.
+
+Important rules:
+- Do not invent stakeholder names, dates, progress, achievements, risks,
+  deadlines, budgets or project status.
+- If information is missing, use "Not provided" or a clear placeholder.
+- Do not present assumptions as confirmed facts.
+- Do not claim that work has been completed unless the user states this.
+- Keep the communication concise, professional and suitable for review by a
+  human project manager.
+
+Use this structure:
+Subject
+Project Update
+Current Status
+Progress / Completed Activities
+Current Issues or Risks
+Next Steps
+Information Requiring Confirmation
+""",
+    },
+}
+
+
+# ------------------------------------------------------------
+# Hugging Face connection
+# ------------------------------------------------------------
+@st.cache_resource
+def get_hf_client():
+    """Create one cached Hugging Face InferenceClient."""
+    try:
+        hf_token = st.secrets["HF_TOKEN"]
+    except Exception:
+        return None
+
+    if not hf_token or not str(hf_token).strip():
+        return None
+
+    return InferenceClient(
+        provider="auto",
+        api_key=str(hf_token).strip(),
+    )
+
+
+def generate_response(function_name: str, project_input: str) -> str:
+    """Generate a project-management response through Hugging Face."""
+    client = get_hf_client()
+
+    if client is None:
+        raise RuntimeError(
+            "The Hugging Face API token has not been configured. "
+            "Please add HF_TOKEN in the Streamlit app Secrets settings."
+        )
+
+    function = FUNCTIONS[function_name]
+
+    system_prompt = """You are an AI assistant supporting IT project management.
+
+Your role is to help a human project manager draft and organise information.
+You are NOT an autonomous project manager.
+
+Accuracy rules are mandatory:
+- Use only facts supplied by the user as confirmed project information.
+- Never fabricate project-specific facts.
+- Never invent names, dates, budgets, requirements, technologies, stakeholders,
+  project status, decisions, deadlines or completed work.
+- When information is missing, explicitly say "Not provided" or
+  "Requires confirmation".
+- If you make a generic suggestion, clearly label it as proposed or potential.
+- Do not make unsupported statements sound certain.
+- Produce a clear, professional, structured response.
+- The human user must verify the output before using it in a real project.
+"""
+
+    user_prompt = f"""
+Selected project-management function:
+{function_name}
+
+Task-specific instructions:
+{function["instruction"]}
+
+Project information supplied by the user:
+--- BEGIN USER INFORMATION ---
+{project_input}
+--- END USER INFORMATION ---
+
+Generate the requested output now.
+"""
+
+    try:
+        completion = client.chat.completions.create(
+            model=MODEL_ID,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens=MAX_NEW_TOKENS,
+            temperature=0.0,
+        )
+
+        if not completion or not getattr(completion, "choices", None):
+            raise RuntimeError("The AI service returned an empty response.")
+
+        message = completion.choices[0].message
+        output = getattr(message, "content", None)
+
+        if not output or not str(output).strip():
+            raise RuntimeError("The AI service returned no usable text.")
+
+        return str(output).strip()
+
+    except Exception as exc:
+        error_text = str(exc).strip()
+
+        # Keep technical details out of the normal user interface while still
+        # making the failure understandable.
+        if "401" in error_text or "Unauthorized" in error_text:
+            raise RuntimeError(
+                "The AI service rejected the Hugging Face token. "
+                "Please check the HF_TOKEN in Streamlit Secrets."
+            ) from exc
+
+        if "429" in error_text or "rate" in error_text.lower():
+            raise RuntimeError(
+                "The AI service is temporarily rate-limited or out of available "
+                "inference capacity. Please try again later."
+            ) from exc
+
+        if "402" in error_text or "payment" in error_text.lower():
+            raise RuntimeError(
+                "The selected Hugging Face inference provider requires available "
+                "credits for this request. Please check your Hugging Face "
+                "Inference Providers account and credits."
+            ) from exc
+
+        raise RuntimeError(
+            "The AI service could not generate the response. "
+            "Please try again. If the problem continues, check the app logs."
+        ) from exc
+
+
+# ------------------------------------------------------------
+# User interface
+# ------------------------------------------------------------
 st.title("📊 AI Project Management Assistant")
 
 st.write(
-    "A Generative AI-based assistant designed to support "
-    "selected IT project management activities."
+    "A Generative AI-based assistant designed to support selected "
+    "IT project-management activities."
 )
 
 st.warning(
-    "⚠️ AI-generated information may contain inaccurate or "
-    "unsupported content. Please verify all outputs before "
-    "using them for project-management decisions."
+    "⚠️ AI-generated information may contain inaccurate or unsupported "
+    "content. Please verify all outputs before using them for "
+    "project-management decisions."
 )
 
+st.info(
+    "Human review is required. The assistant generates drafts and "
+    "suggestions; it does not replace project-manager judgement."
+)
 
-# ---------------------------------------------------------
-# Function selection
-# ---------------------------------------------------------
-
-st.subheader("Select a project-management function")
+st.subheader("1. Select a project-management function")
 
 function = st.selectbox(
     "Choose a function:",
-    [
-        "Project Plan",
-        "Risk Register",
-        "Meeting Minutes",
-        "Project Summary",
-        "Stakeholder Communication"
-    ]
+    list(FUNCTIONS.keys()),
 )
 
+st.caption(FUNCTIONS[function]["description"])
 
-# ---------------------------------------------------------
-# Input area
-# ---------------------------------------------------------
+st.subheader("2. Enter project information")
 
 project_input = st.text_area(
-    "Enter your project information:",
-    height=220,
-    placeholder="Enter the relevant project information here..."
+    "Project information",
+    height=250,
+    max_chars=MAX_INPUT_CHARS,
+    placeholder=(
+        "Enter the relevant project information here. "
+        "For example: project objectives, tasks, meeting notes, "
+        "known risks, current status, stakeholders or next steps."
+    ),
+    help=f"Maximum input length: {MAX_INPUT_CHARS:,} characters.",
 )
 
+character_count = len(project_input)
+st.caption(f"{character_count:,} / {MAX_INPUT_CHARS:,} characters")
 
-# ---------------------------------------------------------
-# Qwen AI function
-# ---------------------------------------------------------
+generate_button = st.button(
+    "🤖 Generate AI Output",
+    type="primary",
+    use_container_width=True,
+)
 
-def ask_qwen(system_prompt, user_prompt):
+if generate_button:
+    cleaned_input = project_input.strip()
 
-    client = InferenceClient(
-        api_key=st.secrets["HF_TOKEN"],
-        provider="featherless-ai"
-    )
-
-    messages = [
-        {
-            "role": "system",
-            "content": system_prompt
-        },
-        {
-            "role": "user",
-            "content": user_prompt
-        }
-    ]
-
-    response = client.chat.completions.create(
-        model="Qwen/Qwen2.5-3B-Instruct",
-        messages=messages,
-        max_tokens=800,
-        temperature=0.2
-    )
-
-    return response.choices[0].message.content
-
-
-# ---------------------------------------------------------
-# Project Plan
-# ---------------------------------------------------------
-
-def generate_project_plan(project_information):
-
-    system_prompt = (
-        "You are an IT project management assistant. "
-        "Your task is to organise the information provided by "
-        "the user into a structured project plan. "
-        "STRICT RULE: Use ONLY information explicitly stated "
-        "by the user. Do NOT infer, assume, predict, or invent "
-        "project objectives, scope, deliverables, stakeholders, "
-        "team members, technologies, budgets, dates, deadlines, "
-        "activities, risks, or requirements. "
-        "If information for a section is not provided, write "
-        "'Not provided'. "
-        "Do not add plausible examples or recommendations "
-        "unless the user explicitly asks for recommendations. "
-        "The output must clearly distinguish provided "
-        "information from missing information."
-    )
-
-    user_prompt = (
-        "Organise the following project information into a "
-        "structured project plan.\n\n"
-        "Use these sections:\n"
-        "- Project Overview\n"
-        "- Objectives\n"
-        "- Scope\n"
-        "- Deliverables\n"
-        "- Project Team\n"
-        "- Stakeholders\n"
-        "- Activities\n"
-        "- Communication Plan\n"
-        "- Quality Assurance\n"
-        "- Budget\n"
-        "- Information Gaps\n\n"
-        "For every section, use only information explicitly "
-        "contained in the user's input. If the information is "
-        "not available, write 'Not provided'. "
-        "Do not invent or infer missing project details.\n\n"
-        "Project information:\n"
-        + project_information
-    )
-
-    return ask_qwen(system_prompt, user_prompt)
-
-# ---------------------------------------------------------
-# Risk Register
-# ---------------------------------------------------------
-
-def generate_risk_register(project_information):
-
-    system_prompt = (
-        "You are an IT project management assistant. "
-        "Create a practical risk register based on the "
-        "information provided by the user. "
-        "Do not present missing or unknown information as "
-        "an established fact about the project. "
-        "You may identify reasonable potential risks, but "
-        "clearly describe them as potential risks rather "
-        "than confirmed project conditions. "
-        "Do not invent project-specific facts such as actual "
-        "funding problems, legal issues, staffing problems, "
-        "technical problems, deadlines, or requirements "
-        "unless they are stated by the user. "
-        "When information is unavailable, state "
-        "'Not provided' or 'Requires confirmation'."
-    )
-
-    user_prompt = (
-        "Create a structured risk register for the following "
-        "project information.\n\n"
-        "For each risk, include:\n"
-        "- Risk ID\n"
-        "- Risk description\n"
-        "- Likelihood\n"
-        "- Impact\n"
-        "- Risk level\n"
-        "- Mitigation/action\n\n"
-        "Clearly distinguish between risks supported by the "
-        "provided information and potential risks that "
-        "require confirmation.\n\n"
-        "Do not claim that unprovided problems already exist.\n\n"
-        "Project information:\n"
-        + project_information
-    )
-
-    return ask_qwen(system_prompt, user_prompt)
-
-
-# ---------------------------------------------------------
-# Meeting Minutes
-# ---------------------------------------------------------
-
-def generate_meeting_minutes(meeting_information):
-
-    system_prompt = (
-        "You are an IT project management assistant. "
-        "Create professional and structured meeting minutes "
-        "using only the information provided by the user. "
-        "Do not invent attendees, dates, decisions, actions, "
-        "deadlines, discussion points, or responsibilities. "
-        "If information is missing, clearly state "
-        "'Not provided' or 'Requires confirmation'."
-    )
-
-    user_prompt = (
-        "Create professional meeting minutes from the "
-        "following information.\n\n"
-        "Include:\n"
-        "- Meeting purpose\n"
-        "- Date and time, if provided\n"
-        "- Attendees\n"
-        "- Key discussion points\n"
-        "- Decisions\n"
-        "- Action items\n"
-        "- Responsible persons\n"
-        "- Deadlines\n"
-        "- Information requiring confirmation\n\n"
-        "Do not invent information that was not provided.\n\n"
-        "Meeting information:\n"
-        + meeting_information
-    )
-
-    return ask_qwen(system_prompt, user_prompt)
-
-
-# ---------------------------------------------------------
-# Project Summary
-# ---------------------------------------------------------
-
-def generate_project_summary(project_information):
-
-    system_prompt = (
-        "You are an IT project management assistant. "
-        "Create a concise and accurate project summary using "
-        "only the information provided by the user. "
-        "Do not invent project facts. "
-        "Do not assume that missing activities, deadlines, "
-        "budgets, risks, achievements, or project status "
-        "actually exist. "
-        "If information is missing, state "
-        "'Not provided' or 'Requires confirmation'."
-    )
-
-    user_prompt = (
-        "Create a professional project summary from the "
-        "following information.\n\n"
-        "Include:\n"
-        "- Project overview\n"
-        "- Main objectives\n"
-        "- Scope\n"
-        "- Key stakeholders\n"
-        "- Project team\n"
-        "- Current activities or status, if provided\n"
-        "- Key deliverables\n"
-        "- Risks or issues mentioned by the user\n"
-        "- Important information gaps\n\n"
-        "Clearly distinguish between provided information "
-        "and information that requires confirmation.\n\n"
-        "Project information:\n"
-        + project_information
-    )
-
-    return ask_qwen(system_prompt, user_prompt)
-
-
-# ---------------------------------------------------------
-# Stakeholder Communication
-# ---------------------------------------------------------
-
-def generate_stakeholder_communication(project_information):
-
-    system_prompt = (
-        "You are an IT project management assistant. "
-        "Create professional stakeholder communication using "
-        "only the information provided by the user. "
-        "Do not invent project progress, achievements, "
-        "deadlines, problems, budgets, decisions, or other "
-        "project facts. "
-        "If important information is missing, clearly mark it "
-        "as 'Not provided' or 'Requires confirmation'."
-    )
-
-    user_prompt = (
-        "Prepare a professional stakeholder communication "
-        "message based on the following project information.\n\n"
-        "Include, where supported by the information:\n"
-        "- Subject\n"
-        "- Project status or overview\n"
-        "- Key activities\n"
-        "- Important updates\n"
-        "- Risks or issues\n"
-        "- Required stakeholder actions\n"
-        "- Next steps\n\n"
-        "Do not invent information. "
-        "Clearly identify information that requires confirmation.\n\n"
-        "Project information:\n"
-        + project_information
-    )
-
-    return ask_qwen(system_prompt, user_prompt)
-
-
-# ---------------------------------------------------------
-# Generate Output button
-# ---------------------------------------------------------
-
-if st.button("Generate Output"):
-
-    # Empty input protection
-    if not project_input.strip():
-
+    if not cleaned_input:
         st.error(
-            "Please enter some project information before "
-            "generating an output."
+            "Please enter some project information before generating "
+            "an output."
         )
+        st.stop()
 
-    # Long input protection
-    elif len(project_input) > 10000:
-
+    if len(cleaned_input) > MAX_INPUT_CHARS:
         st.error(
-            "Your input is too long. Please shorten the "
-            "project information and try again."
+            f"Your input is too long. Please shorten it to "
+            f"{MAX_INPUT_CHARS:,} characters or fewer."
         )
+        st.stop()
 
-    # Project Plan
-    elif function == "Project Plan":
+    with st.spinner("Generating the project-management output..."):
+        try:
+            output = generate_response(function, cleaned_input)
 
-        with st.spinner("Generating project plan..."):
+            st.subheader("3. AI-Generated Draft")
 
-            try:
+            st.markdown(output)
 
-                output = generate_project_plan(project_input)
+            st.warning(
+                "⚠️ Verification required: Review the generated content "
+                "against the original project information before using it. "
+                "The model may produce plausible but unsupported information."
+            )
 
-                st.subheader("Generated Project Plan")
+            st.download_button(
+                label="⬇️ Download output as text",
+                data=output,
+                file_name=(
+                    function.lower()
+                    .replace(" ", "_")
+                    + "_ai_draft.txt"
+                ),
+                mime="text/plain",
+            )
 
-                st.markdown(output)
+        except RuntimeError as exc:
+            st.error(str(exc))
 
-            except Exception:
+        except Exception:
+            st.error(
+                "An unexpected problem occurred while generating the output. "
+                "Please try again."
+            )
 
-                st.error(
-                    "The AI service could not generate the "
-                    "requested output at this time. "
-                    "Please try again later."
-                )
+st.divider()
 
-    # Risk Register
-    elif function == "Risk Register":
-
-        with st.spinner("Generating risk register..."):
-
-            try:
-
-                output = generate_risk_register(project_input)
-
-                st.subheader("Generated Risk Register")
-
-                st.markdown(output)
-
-            except Exception:
-
-                st.error(
-                    "The AI service could not generate the "
-                    "requested output at this time. "
-                    "Please try again later."
-                )
-
-    # Meeting Minutes
-    elif function == "Meeting Minutes":
-
-        with st.spinner("Generating meeting minutes..."):
-
-            try:
-
-                output = generate_meeting_minutes(project_input)
-
-                st.subheader("Generated Meeting Minutes")
-
-                st.markdown(output)
-
-            except Exception:
-
-                st.error(
-                    "The AI service could not generate the "
-                    "requested output at this time. "
-                    "Please try again later."
-                )
-
-    # Project Summary
-    elif function == "Project Summary":
-
-        with st.spinner("Generating project summary..."):
-
-            try:
-
-                output = generate_project_summary(project_input)
-
-                st.subheader("Generated Project Summary")
-
-                st.markdown(output)
-
-            except Exception:
-
-                st.error(
-                    "The AI service could not generate the "
-                    "requested output at this time. "
-                    "Please try again later."
-                )
-
-    # Stakeholder Communication
-    elif function == "Stakeholder Communication":
-
-        with st.spinner(
-            "Generating stakeholder communication..."
-        ):
-
-            try:
-
-                output = generate_stakeholder_communication(
-                    project_input
-                )
-
-                st.subheader(
-                    "Generated Stakeholder Communication"
-                )
-
-                st.markdown(output)
-
-            except Exception:
-
-                st.error(
-                    "The AI service could not generate the "
-                    "requested output at this time. "
-                    "Please try again later."
-                )
+with st.expander("About this prototype"):
+    st.write(
+        "This prototype uses Qwen2.5-3B-Instruct through Hugging Face "
+        "Inference Providers. It is designed as an AI-assisted project-"
+        "management tool for exploratory academic evaluation."
+    )
+    st.write(
+        "The five supported functions are Project Plan, Risk Register, "
+        "Meeting Minutes, Project Summary and Stakeholder Communication."
+    )
