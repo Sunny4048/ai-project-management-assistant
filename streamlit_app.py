@@ -42,9 +42,9 @@ project_input = st.text_area(
 
 def generate_project_plan(project_information):
 
-   client = InferenceClient(
-    api_key=st.secrets["HF_TOKEN"],
-    provider="featherless-ai"
+    client = InferenceClient(
+        api_key=st.secrets["HF_TOKEN"],
+        provider="featherless-ai"
     )
 
     messages = [
