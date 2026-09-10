@@ -77,7 +77,7 @@ def generate_project_plan(project_information):
     )
 
     return response.choices[0].message.content
-    def generate_risk_register(project_information):
+def generate_risk_register(project_information):
 
     client = InferenceClient(
         api_key=st.secrets["HF_TOKEN"],
@@ -117,8 +117,7 @@ def generate_project_plan(project_information):
 
     return response.choices[0].message.content
 
-
-if st.button("Generate Output"):
+   if st.button("Generate Output"):
 
     if not project_input.strip():
 
