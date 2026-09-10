@@ -77,6 +77,45 @@ def generate_project_plan(project_information):
     )
 
     return response.choices[0].message.content
+    def generate_risk_register(project_information):
+
+    client = InferenceClient(
+        api_key=st.secrets["HF_TOKEN"],
+        provider="featherless-ai"
+    )
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are an IT project management assistant. "
+                "Create a practical risk register using only "
+                "the information provided by the user. "
+                "Do not invent unsupported project facts. "
+                "If information is missing, clearly identify "
+                "it as an assumption or information gap."
+            )
+        },
+        {
+            "role": "user",
+            "content": (
+                "Create a structured risk register for the "
+                "following project information. For each risk, "
+                "include the risk description, likelihood, "
+                "impact, risk level, and mitigation/action.\n\n"
+                + project_information
+            )
+        }
+    ]
+
+    response = client.chat.completions.create(
+        model="Qwen/Qwen2.5-3B-Instruct",
+        messages=messages,
+        max_tokens=700,
+        temperature=0.2
+    )
+
+    return response.choices[0].message.content
 
 
 if st.button("Generate Output"):
@@ -121,3 +160,4 @@ if st.button("Generate Output"):
                     "at this time. Please check the configuration "
                     "and try again."
                 )
+                
