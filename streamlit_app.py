@@ -94,22 +94,35 @@ def generate_risk_register(project_information):
         {
             "role": "system",
             "content": (
-                "You are an IT project management assistant. "
-                "Create a practical risk register using only "
-                "the information provided by the user. "
-                "Do not invent unsupported project facts. "
-                "If information is missing, clearly identify "
-                "it as an assumption or information gap."
-            )
+    "You are an IT project management assistant. "
+    "Create a practical risk register based on the "
+    "information provided by the user. "
+    "Do not present missing or unknown information as "
+    "an established fact about the project. "
+    "You may identify reasonable potential risks, but "
+    "clearly describe them as potential risks rather "
+    "than confirmed project conditions. "
+    "Do not invent project-specific facts such as actual "
+    "funding problems, legal issues, staffing problems, "
+    "technical problems, deadlines, or requirements "
+    "unless they are stated by the user. "
+    "When information is unavailable, state "
+    "'Not provided' or 'Requires confirmation'."
+)
+            
         },
         {
             "role": "user",
             "content": (
-                "Create a structured risk register for the "
-                "following project information. For each risk, "
-                "include risk description, likelihood, impact, "
-                "risk level, and mitigation/action.\n\n"
-                + project_information
+     "Create a structured risk register for the "
+    "following project information. For each risk, "
+    "include risk description, likelihood, impact, "
+    "risk level, and mitigation/action. "
+    "Clearly distinguish between risks supported by "
+    "the provided information and potential risks "
+    "that require confirmation. Do not claim that "
+    "unprovided problems already exist.\n\n"
+    + project_information
             )
         }
     ]
