@@ -100,39 +100,45 @@ def generate_project_plan(project_information):
 
     system_prompt = (
         "You are an IT project management assistant. "
-        "Create a practical and structured project plan "
-        "using the information provided by the user. "
-        "Do not present missing information as an established "
-        "project fact. Do not invent specific budgets, dates, "
-        "deadlines, requirements, staffing problems, legal "
-        "issues, technical problems, or other project facts "
-        "unless they are provided by the user. "
-        "When information is unavailable, write "
-        "'Not provided' or 'Requires confirmation'."
+        "Your task is to organise the information provided by "
+        "the user into a structured project plan. "
+        "STRICT RULE: Use ONLY information explicitly stated "
+        "by the user. Do NOT infer, assume, predict, or invent "
+        "project objectives, scope, deliverables, stakeholders, "
+        "team members, technologies, budgets, dates, deadlines, "
+        "activities, risks, or requirements. "
+        "If information for a section is not provided, write "
+        "'Not provided'. "
+        "Do not add plausible examples or recommendations "
+        "unless the user explicitly asks for recommendations. "
+        "The output must clearly distinguish provided "
+        "information from missing information."
     )
 
     user_prompt = (
-        "Create a structured project plan from the following "
-        "information.\n\n"
-        "Include, where appropriate:\n"
-        "- Project overview\n"
+        "Organise the following project information into a "
+        "structured project plan.\n\n"
+        "Use these sections:\n"
+        "- Project Overview\n"
         "- Objectives\n"
         "- Scope\n"
         "- Deliverables\n"
-        "- Project team\n"
+        "- Project Team\n"
         "- Stakeholders\n"
         "- Activities\n"
-        "- Communication plan\n"
-        "- Quality assurance\n"
-        "- Budget information\n"
-        "- Potential assumptions or information gaps\n\n"
-        "Clearly identify information that was not provided.\n\n"
+        "- Communication Plan\n"
+        "- Quality Assurance\n"
+        "- Budget\n"
+        "- Information Gaps\n\n"
+        "For every section, use only information explicitly "
+        "contained in the user's input. If the information is "
+        "not available, write 'Not provided'. "
+        "Do not invent or infer missing project details.\n\n"
         "Project information:\n"
         + project_information
     )
 
     return ask_qwen(system_prompt, user_prompt)
-
 
 # ---------------------------------------------------------
 # Risk Register
