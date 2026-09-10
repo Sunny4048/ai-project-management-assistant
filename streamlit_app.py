@@ -135,7 +135,48 @@ def generate_risk_register(project_information):
     )
 
     return response.choices[0].message.content
+def generate_meeting_minutes(meeting_information):
 
+    client = InferenceClient(
+        api_key=st.secrets["HF_TOKEN"],
+        provider="featherless-ai"
+    )
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are an IT project management assistant. "
+                "Create structured meeting minutes using only "
+                "the information provided by the user. "
+                "Do not invent attendees, decisions, dates, "
+                "actions, deadlines, or discussion points. "
+                "If information is missing, state "
+                "'Not provided' or 'Requires confirmation'."
+            )
+        },
+        {
+            "role": "user",
+            "content": (
+                "Create professional meeting minutes from "
+                "the following information. Include meeting "
+                "purpose, attendees, key discussion points, "
+                "decisions, action items, responsible persons, "
+                "and deadlines. Clearly identify information "
+                "that was not provided.\n\n"
+                + meeting_information
+            )
+        }
+    ]
+
+    response = client.chat.completions.create(
+        model="Qwen/Qwen2.5-3B-Instruct",
+        messages=messages,
+        max_tokens=700,
+        temperature=0.2
+    )
+
+    return response.choices[0].message.content
 
 if st.button("Generate Output"):
 
@@ -181,6 +222,43 @@ if st.button("Generate Output"):
                 output = generate_risk_register(project_input)
 
                 st.subheader("Generated Risk Register")
+
+                st.write(output)
+
+            except Exception:
+
+                st.error(
+                    "The AI service could not generate an output "
+                    "at this time. Please try again later."
+                )
+                       elif function == "Risk Register":
+
+        with st.spinner("Generating risk register..."):
+
+            try:
+
+                output = generate_risk_register(project_input)
+
+                st.subheader("Generated Risk Register")
+
+                st.write(output)
+
+            except Exception:
+
+                st.error(
+                    "The AI service could not generate an output "
+                    "at this time. Please try again later."
+                )
+
+    elif function == "Meeting Minutes":
+
+        with st.spinner("Generating meeting minutes..."):
+
+            try:
+
+                output = generate_meeting_minutes(project_input)
+
+                st.subheader("Generated Meeting Minutes")
 
                 st.write(output)
 
