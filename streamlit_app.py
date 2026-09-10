@@ -13,11 +13,11 @@ st.write(
     "selected IT project management activities."
 )
 
-st.info(
+st.warning(
     "⚠️ AI-generated information may contain inaccurate or "
     "unsupported content. Please verify all outputs before "
     "using them for project-management decisions."
-")
+)
 
 st.subheader("Select a project-management function")
 
@@ -57,4 +57,6 @@ if st.button("Generate Output"):
             f"Ready to generate a {function}."
         )
 
-        st.write("Your project information has been received.")
+        st.write(
+            "Your project information has been received."
+        )
