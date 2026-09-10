@@ -1,11 +1,13 @@
 import streamlit as st
 from huggingface_hub import InferenceClient
 
+
 st.set_page_config(
     page_title="AI Project Management Assistant",
     page_icon="📊",
     layout="wide"
 )
+
 
 st.title("📊 AI Project Management Assistant")
 
@@ -20,6 +22,7 @@ st.warning(
     "using them for project-management decisions."
 )
 
+
 st.subheader("Select a project-management function")
 
 function = st.selectbox(
@@ -32,6 +35,7 @@ function = st.selectbox(
         "Stakeholder Communication"
     ]
 )
+
 
 project_input = st.text_area(
     "Enter your project information:",
@@ -77,6 +81,8 @@ def generate_project_plan(project_information):
     )
 
     return response.choices[0].message.content
+
+
 def generate_risk_register(project_information):
 
     client = InferenceClient(
@@ -101,8 +107,8 @@ def generate_risk_register(project_information):
             "content": (
                 "Create a structured risk register for the "
                 "following project information. For each risk, "
-                "include the risk description, likelihood, "
-                "impact, risk level, and mitigation/action.\n\n"
+                "include risk description, likelihood, impact, "
+                "risk level, and mitigation/action.\n\n"
                 + project_information
             )
         }
@@ -117,7 +123,8 @@ def generate_risk_register(project_information):
 
     return response.choices[0].message.content
 
-   if st.button("Generate Output"):
+
+if st.button("Generate Output"):
 
     if not project_input.strip():
 
@@ -133,14 +140,7 @@ def generate_risk_register(project_information):
             "project information and try again."
         )
 
-    elif function != "Project Plan":
-
-        st.info(
-            "This function will be connected in the next step. "
-            "Project Plan is currently being tested."
-        )
-
-    else:
+    elif function == "Project Plan":
 
         with st.spinner("Generating project plan..."):
 
@@ -156,7 +156,30 @@ def generate_risk_register(project_information):
 
                 st.error(
                     "The AI service could not generate an output "
-                    "at this time. Please check the configuration "
-                    "and try again."
+                    "at this time. Please try again later."
                 )
-                
+
+    elif function == "Risk Register":
+
+        with st.spinner("Generating risk register..."):
+
+            try:
+
+                output = generate_risk_register(project_input)
+
+                st.subheader("Generated Risk Register")
+
+                st.write(output)
+
+            except Exception:
+
+                st.error(
+                    "The AI service could not generate an output "
+                    "at this time. Please try again later."
+                )
+
+    else:
+
+        st.info(
+            "This function will be added in the next development step."
+        )
